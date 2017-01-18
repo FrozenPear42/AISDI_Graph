@@ -11,8 +11,6 @@ class IsomorphicFunction {
 public:
     IsomorphicFunction() : mExists(false) {};
 
-    bool exists() { return mExists; };
-
     operator bool() { return mExists; }
 
     void addImage(vert_t pA, vert_t pB);
@@ -37,6 +35,14 @@ public:
         return !operator==(other);
     }
 
+    vert_t getA() const {
+        return mPair.first;
+    }
+
+    vert_t getB() const {
+        return mPair.second;
+    }
+
     void permute(std::vector<vert_t>& pVertices) {
         mPair.first = pVertices[mPair.first];
         mPair.second = pVertices[mPair.second];
@@ -57,6 +63,7 @@ public:
 private:
     std::size_t mVerticesCount;
     std::list<Edge> mEdges;
+    const std::size_t MAX_THREADS = 20;
 };
 
 #endif //AISDI_GRAPH_GRAPH_H

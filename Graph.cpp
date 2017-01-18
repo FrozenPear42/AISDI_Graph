@@ -18,51 +18,72 @@ Graph Graph::fromStream(std::istream& pInput) {
 
 IsomorphicFunction Graph::isomorphicTo(Graph& pOther) {
     IsomorphicFunction result;
+    // same vertices count?
     if (mVerticesCount != pOther.mVerticesCount)
         return result;
+    // Same a=edges count?
     if (mEdges.size() != pOther.mEdges.size())
         return result;
+    //Same vertices degrees?
+    std::vector<vert_t> selfDegree(mVerticesCount, 0);
+    std::vector<vert_t> otherDegree(mVerticesCount, 0);
+    for (auto&& edge : mEdges) {
+        selfDegree[edge.getA()]++;
+        selfDegree[edge.getB()]++;
+    }
 
-    std::vector<std::thread> threads;
-    uint8_t flag = 0;
-    //thread for each vertex
-    if (mVerticesCount <= 20) {
-        std::size_t cnt = mVerticesCount;
-        std::list<Edge> otherEdges(pOther.mEdges);
-        std::mutex m;
+    for (auto&& edge : pOther.mEdges) {
+        otherDegree[edge.getA()]++;
+        otherDegree[edge.getB()]++;
+    }
+    if (!std::is_permutation(selfDegree.begin(), selfDegree.end(), otherDegree.begin()))
+        return result;
 
-        for (std::size_t constVertex = 0; constVertex < mVerticesCount; ++constVertex) {
+    std::list<Edge>& otherEdges(pOther.mEdges);
+    std::list<Edge>& selfEdges(mEdges);
+    std::size_t threadTurns = mVerticesCount / MAX_THREADS;
+    std::size_t verticesCount = mVerticesCount;
+    bool found = false;
+    std::mutex m;
+
+    for (std::size_t threadNumber = 0; threadNumber <= threadTurns; threadNumber++) {
+        std::vector<std::thread> threads;
+        std::size_t firstVertex = threadTurns * threadNumber;
+        for (std::size_t constVertex = firstVertex; constVertex < firstVertex + mVerticesCount; ++constVertex) {
             threads.emplace_back(
-                    std::thread([&flag, &result, &m, constVertex, cnt, otherEdges](std::list<Edge> selfEdges) {
+                    std::thread([&found, &result, &m, &selfEdges, &otherEdges, constVertex, verticesCount]() {
                         // Create array of vertices to permute
                         std::vector<vert_t> vertices;
+                        // keep first vertex fixed
                         vertices.emplace_back(constVertex);
-                        for (std::size_t vert = 0; vert < cnt; ++vert)
-                            if (vert != constVertex)
-                                vertices.emplace_back(vert);
-                        // Check every permutation until one is found
+                        for (std::size_t vertexID = 0; vertexID < verticesCount; ++vertexID)
+                            if (vertexID != constVertex)
+                                vertices.emplace_back(vertexID);
+
+                        // Check each permutation until one is found
                         do {
                             std::list<Edge> edges(selfEdges);
                             for (auto& edge : edges)
                                 edge.permute(vertices);
-
+                            // check permutation and if exists acquire mutex, create function and set fond flag
                             if (std::is_permutation(edges.begin(), edges.end(), otherEdges.begin())) {
                                 std::lock_guard<std::mutex> lock(m);
-                                if (flag == 0) {
-                                    flag = 1;
-                                    for (std::size_t v = 0; v < cnt; ++v) {
+                                if (!found) {
+                                    found = true;
+                                    for (std::size_t v = 0; v < verticesCount; ++v)
                                         result.addImage((vert_t) v, vertices[v]);
-                                    }
                                 }
                             }
-                            if (flag != 0)
+                            if (found)
                                 return;
                         } while (std::next_permutation(vertices.begin() + 1, vertices.end()));
-                    }, mEdges));
-
+                        return;
+                    }));
         }
         for (auto&& thread : threads)
             thread.join();
+        if (found)
+            break;
     }
     return result;
 }
